@@ -4,7 +4,10 @@ package com.adang.druid.proxy;
 import com.adang.druid.proxy.sql.SQLUtils;
 import com.adang.druid.proxy.sql.ast.SQLObject;
 import com.adang.druid.proxy.sql.ast.SQLStatement;
+import com.adang.druid.proxy.sql.ast.expr.SQLBinaryOpExpr;
+import com.adang.druid.proxy.sql.ast.expr.SQLCaseStatement;
 import com.adang.druid.proxy.sql.ast.statement.*;
+import com.adang.druid.proxy.sql.dialect.mysql.ast.MySqlUnique;
 import com.adang.druid.proxy.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.adang.druid.proxy.sql.parser.SQLStatementParser;
 import com.adang.druid.proxy.util.JdbcConstants;
@@ -13,7 +16,7 @@ import java.util.List;
 
 public class test {
 
-  public static void analyseStatement(SQLStatement stmt) {
+  public static short analyseStatementType(SQLStatement stmt) {
     short statementType = 0; // 未分类
     if (stmt instanceof SQLSelectStatement) {
       System.out.println("select");
@@ -30,9 +33,101 @@ public class test {
     } else if (stmt instanceof SQLCreateTableStatement) {
       System.out.println("create table");
       statementType = 5;
+    } else if (stmt instanceof SQLAlterStatement) {
+      System.out.println("alter");
+      statementType = 6;
+    } else if (stmt instanceof SQLBlockStatement) {
+      System.out.println("block");
+      statementType = 7;
+    } else if (stmt instanceof SQLCallStatement) {
+      System.out.println("call");
+      statementType = 8;
+    } else if (stmt instanceof SQLCloseStatement) {
+      System.out.println("close");
+      statementType = 9;
+    } else if (stmt instanceof SQLCommentStatement) {
+      System.out.println("comment");
+      statementType = 10;
+    } else if (stmt instanceof SQLCommitStatement) {
+      System.out.println("commit");
+      statementType = 11;
+    }  else if (stmt instanceof SQLCreateStatement) {
+      System.out.println("create");
+      statementType = 12;
+    } else if (stmt instanceof SQLDeclareStatement) {
+      System.out.println("declare");
+      statementType = 13;
+    } else if (stmt instanceof SQLDescribeStatement) {
+      System.out.println("describe");
+      statementType = 14;
+    } else if (stmt instanceof SQLDropStatement) {
+      System.out.println("drop");
+      statementType = 15;
+    } else if (stmt instanceof SQLExplainStatement) {
+      System.out.println("explain");
+      statementType = 16;
+    } else if (stmt instanceof SQLExprStatement) {
+      System.out.println("expr");
+      statementType = 17;
+    } else if (stmt instanceof SQLFetchStatement) {
+      System.out.println("fetch");
+      statementType = 18;
+    } else if (stmt instanceof SQLGrantStatement) {
+      System.out.println("grant");
+      statementType = 19;
+    } else if (stmt instanceof SQLIfStatement) {
+      System.out.println("if");
+      statementType = 20;
+    } else if (stmt instanceof SQLLoopStatement) {
+      System.out.println("loop");
+      statementType = 21;
+    } else if (stmt instanceof SQLMergeStatement) {
+      System.out.println("merge");
+      statementType = 22;
+    } else if (stmt instanceof SQLOpenStatement) {
+      System.out.println("open");
+      statementType = 23;
+    } else if (stmt instanceof SQLReplaceStatement) {
+      System.out.println("replace");
+      statementType = 24;
+    } else if (stmt instanceof SQLReturnStatement) {
+      System.out.println("return");
+      statementType = 25;
+    } else if (stmt instanceof SQLRollbackStatement) {
+      System.out.println("rollback");
+      statementType = 26;
+    } else if (stmt instanceof SQLSetStatement) {
+      System.out.println("set");
+      statementType = 27;
+    } else if (stmt instanceof SQLTruncateStatement) {
+      System.out.println("truncate");
+      statementType = 28;
+    } else if (stmt instanceof SQLUseStatement) {
+      System.out.println("use");
+      statementType = 29;
+    } else if (stmt instanceof SQLWhileStatement) {
+      System.out.println("while");
+      statementType = 30;
+    } else if (stmt instanceof SQLCaseStatement) {
+      System.out.println("case");
+      statementType = 31;
+    } else if (stmt instanceof SQLRevokeStatement) {
+      System.out.println("revoke");
+      statementType = 32;
+    } else if (stmt instanceof SQLAlterFunctionStatement) {
+      System.out.println("alter function");
+      statementType = 33;
+    } else if (stmt instanceof SQLAlterTypeStatement) {
+      System.out.println("alter type");
+      statementType = 34;
     } else {
       System.out.println(stmt.getClass());
     }
+    return statementType;
+  }
+
+  public static void analyseStatement(SQLStatement stmt) {
+    short statementType = analyseStatementType(stmt);
     boolean hasChildren = false;
     boolean hasExprTableSource = false;
     boolean hasJoinTableSource = false;
@@ -40,8 +135,15 @@ public class test {
     boolean hasWithSubqueryClause = false;
     boolean hasSelectWithSubquery = false;
     boolean hasUnionQuery = false;
+    int hasInsertValues = 0;
+    int hasUpdateSetItems = 0;
+    int hasColumnDefinitions = 0;
+    int hasMySqlUnique = 0;
+    int hasBinaryOps = 0;
+
     if (!stmt.getChildren().isEmpty()) {
       hasChildren = true;
+
       List<SQLObject> children = stmt.getChildren();
       System.out.println(children);
       for (SQLObject child: children) {
@@ -49,11 +151,11 @@ public class test {
         hasJoinTableSource |= child instanceof SQLJoinTableSource;
         hasSubqueryTableSource |= child instanceof SQLSubqueryTableSource;
         hasWithSubqueryClause |= child instanceof  SQLWithSubqueryClause;
+
         if (statementType == 1 && child instanceof SQLSelect) { // SELECT 语句独有特征
           SQLWithSubqueryClause subquery = ((SQLSelect) child).getWithSubQuery();
           hasSelectWithSubquery |= subquery != null;
-          if (((SQLSelect) child).getQuery() instanceof SQLSelectQueryBlock) {
-            SQLSelectQueryBlock query = (SQLSelectQueryBlock) ((SQLSelect) child).getQuery();
+          if (((SQLSelect) child).getQuery() instanceof SQLSelectQueryBlock query) {
             SQLObject from = query.getFrom();
             hasExprTableSource |= from instanceof SQLExprTableSource;
             hasJoinTableSource |= from instanceof SQLJoinTableSource;
@@ -64,10 +166,34 @@ public class test {
             // SQLUnionQuery query = (SQLUnionQuery) ((SQLSelect) child).getQuery();
           }
         }
+
+        if (statementType == 2 && child instanceof SQLInsertStatement.ValuesClause) {
+          hasInsertValues = ((SQLInsertStatement.ValuesClause) child).getValues().size();
+        }
+
+        if (statementType == 3 && child instanceof SQLUpdateSetItem) {
+          hasUpdateSetItems++;
+        }
+
+        if (statementType == 4) {
+          System.out.println(child);
+        }
+
+        if (statementType == 5) {
+          if (child instanceof SQLColumnDefinition) {
+            hasColumnDefinitions++;
+            continue;
+          }
+          if (child instanceof MySqlUnique) {
+            hasMySqlUnique++;
+          }
+        }
+
+        if (child instanceof SQLBinaryOpExpr) {
+          hasBinaryOps++;
+        }
       }
     }
-
-
   }
 
   public static void analyse(String sql) {
