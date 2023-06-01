@@ -128,17 +128,29 @@ public class test {
 
   public static void analyseStatement(SQLStatement stmt) {
     short statementType = analyseStatementType(stmt);
+    // 是否有子节点
     boolean hasChildren = false;
+    // 是否有表达式表
     boolean hasExprTableSource = false;
+    // 是否有连接表
     boolean hasJoinTableSource = false;
+    // 是否有子查询表
     boolean hasSubqueryTableSource = false;
+    // 是否有 with 查询子句
     boolean hasWithSubqueryClause = false;
+    // select 查询是否有 with 查询子句
     boolean hasSelectWithSubquery = false;
+    // 是否有 union 查询
     boolean hasUnionQuery = false;
+    // 是否有插入值
     int hasInsertValues = 0;
+    // 是否有更新项
     int hasUpdateSetItems = 0;
+    // 是否有列定义
     int hasColumnDefinitions = 0;
+    // 是否有 mysql 唯一约束
     int hasMySqlUnique = 0;
+    // 是否有二元运算
     int hasBinaryOps = 0;
 
     if (!stmt.getChildren().isEmpty()) {
