@@ -126,6 +126,19 @@ public class test {
     return statementType;
   }
 
+  public static int analyseTotalChildren(SQLStatement stmt) {
+    if (stmt.getChildren().isEmpty()) {
+      return 0;
+    }
+    int totalChildren = 0;
+    for (SQLObject child : stmt.getChildren()) {
+      if (child instanceof SQLStatement) {
+        totalChildren += analyseTotalChildren((SQLStatement)child);
+      }
+    }
+    return totalChildren;
+  }
+
   public static void analyseStatement(SQLStatement stmt) {
     short statementType = analyseStatementType(stmt);
     // 是否有子节点
@@ -152,6 +165,10 @@ public class test {
     int hasMySqlUnique = 0;
     // 是否有二元运算
     int hasBinaryOps = 0;
+
+    int totalChildren = 0;
+
+    int height = 0;
 
     if (!stmt.getChildren().isEmpty()) {
       hasChildren = true;
@@ -206,6 +223,10 @@ public class test {
         }
       }
     }
+
+    totalChildren = analyseTotalChildren(stmt);
+
+    System.out.println(totalChildren);
   }
 
   public static void analyse(String sql) {
