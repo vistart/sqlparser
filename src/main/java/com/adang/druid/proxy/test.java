@@ -8,6 +8,7 @@ import com.adang.druid.proxy.sql.ast.expr.SQLBinaryOpExpr;
 import com.adang.druid.proxy.sql.ast.expr.SQLCaseStatement;
 import com.adang.druid.proxy.sql.ast.statement.*;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.MySqlUnique;
+import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
 import com.adang.druid.proxy.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.adang.druid.proxy.sql.parser.SQLStatementParser;
 import com.adang.druid.proxy.util.JdbcConstants;
@@ -126,6 +127,18 @@ public class test {
     return statementType;
   }
 
+  public static int analyseTotalChildrenSQLSelectQuery(SQLSelect sql) {
+    SQLSelectQuery query = sql.getQuery();
+    if (query instanceof MySqlSelectQueryBlock) {
+      SQLTableSource from = ((MySqlSelectQueryBlock)query).getFrom();
+      if (from instanceof SQLSubqueryTableSource) {
+        SQLSelect subSelect = ((SQLSubqueryTableSource) from).getSelect();
+        return 1 + analyseTotalChildrenSQLSelectQuery(subSelect);
+      }
+    }
+    return 1;
+  }
+
   public static int analyseTotalChildren(SQLStatement stmt) {
     if (stmt.getChildren().isEmpty()) {
       return 0;
@@ -134,6 +147,9 @@ public class test {
     for (SQLObject child : stmt.getChildren()) {
       if (child instanceof SQLStatement) {
         totalChildren += analyseTotalChildren((SQLStatement)child);
+      }
+      if (child instanceof SQLSelect) {
+        totalChildren += analyseTotalChildrenSQLSelectQuery((SQLSelect) child);
       }
     }
     return totalChildren;
