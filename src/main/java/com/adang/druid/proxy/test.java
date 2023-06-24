@@ -2,13 +2,17 @@ package com.adang.druid.proxy;
 
 
 import com.adang.druid.proxy.sql.SQLUtils;
+import com.adang.druid.proxy.sql.ast.SQLExpr;
 import com.adang.druid.proxy.sql.ast.SQLObject;
+import com.adang.druid.proxy.sql.ast.SQLOrderBy;
 import com.adang.druid.proxy.sql.ast.SQLStatement;
-import com.adang.druid.proxy.sql.ast.expr.SQLBinaryOpExpr;
-import com.adang.druid.proxy.sql.ast.expr.SQLCaseStatement;
+import com.adang.druid.proxy.sql.ast.expr.*;
 import com.adang.druid.proxy.sql.ast.statement.*;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.MySqlUnique;
+import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlDeleteStatement;
+import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlInsertStatement;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
+import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlUpdateStatement;
 import com.adang.druid.proxy.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.adang.druid.proxy.sql.parser.SQLStatementParser;
 import com.adang.druid.proxy.util.JdbcConstants;
@@ -127,16 +131,95 @@ public class test {
     return statementType;
   }
 
+  public static int analyseTotalChildrenSQLBinaryOpExpr(SQLBinaryOpExpr sql) {
+    int totalChildren = 0;
+    if (sql.getLeft() instanceof SQLBinaryOpExpr) {
+      totalChildren += analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getLeft());
+    } else {
+      totalChildren++;
+    }
+    if (sql.getRight() instanceof SQLBinaryOpExpr) {
+      totalChildren += analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getRight());
+    } else {
+      totalChildren++;
+    }
+    return totalChildren;
+  }
+
   public static int analyseTotalChildrenSQLSelectQuery(SQLSelect sql) {
+    int totalChildren = 0;
     SQLSelectQuery query = sql.getQuery();
     if (query instanceof MySqlSelectQueryBlock) {
+      // select list
+      if (((MySqlSelectQueryBlock) query).getSelectList().size() > 0) {
+        for (SQLSelectItem selectItem : ((MySqlSelectQueryBlock) query).getSelectList()) {
+          if (selectItem.getExpr() instanceof SQLIdentifierExpr || selectItem.getExpr() instanceof SQLAggregateExpr) {
+            totalChildren++;
+          }
+          if (selectItem.getExpr() instanceof SQLCaseExpr) {
+            if (selectItem.getExpr() != null && ((SQLCaseExpr) selectItem.getExpr()).getItems().size() > 0){
+              totalChildren += ((SQLCaseExpr) selectItem.getExpr()).getItems().size();
+            }
+          }
+          if (selectItem.getExpr() instanceof SQLMethodInvokeExpr) {
+            if (selectItem.getExpr() != null && ((SQLMethodInvokeExpr) selectItem.getExpr()).getParameters().size() > 0) {
+              totalChildren += ((SQLMethodInvokeExpr) selectItem.getExpr()).getParameters().size();
+            }
+          }
+        }
+      }
+
+      // from
       SQLTableSource from = ((MySqlSelectQueryBlock)query).getFrom();
       if (from instanceof SQLSubqueryTableSource) {
         SQLSelect subSelect = ((SQLSubqueryTableSource) from).getSelect();
-        return 1 + analyseTotalChildrenSQLSelectQuery(subSelect);
+        totalChildren += analyseTotalChildrenSQLSelectQuery(subSelect);
+      }
+      if (from instanceof SQLExprTableSource) {
+        if (((SQLExprTableSource) from).getExpr() instanceof SQLIdentifierExpr) {
+          totalChildren++;
+        }
+      }
+
+      // group by
+      SQLSelectGroupByClause groupBy = ((MySqlSelectQueryBlock) query).getGroupBy();
+      if (groupBy != null && groupBy.getItems().size() > 0) {
+        for (SQLExpr item : groupBy.getItems()) {
+          if (item instanceof SQLIdentifierExpr) {
+            totalChildren++;
+          }
+        }
+      }
+
+      // order by
+      SQLOrderBy orderBy = ((MySqlSelectQueryBlock) query).getOrderBy();
+      if (orderBy != null && orderBy.getItems().size() > 0) {
+        for (SQLSelectOrderByItem item : orderBy.getItems()) {
+          if (item.getExpr() instanceof SQLIdentifierExpr) {
+            totalChildren++;
+          }
+        }
+      }
+
+      // where
+      SQLExpr where = ((MySqlSelectQueryBlock) query).getWhere();
+      if (where instanceof SQLBinaryOpExpr) {
+        totalChildren += analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) where);
       }
     }
-    return 1;
+    return totalChildren;
+  }
+
+  public static int analyseTotalChildrenSQLUpdateStatement(MySqlUpdateStatement sql) {
+    return 0;
+  }
+
+  public static int analyseTotalChildrenSQLInsertStatement(MySqlInsertStatement sql) {
+    return 0;
+  }
+
+  public static int analyseTotalChildrenSQLDeleteStatement(MySqlDeleteStatement sql) {
+    return 0;
   }
 
   public static int analyseTotalChildren(SQLStatement stmt) {
@@ -150,6 +233,15 @@ public class test {
       }
       if (child instanceof SQLSelect) {
         totalChildren += analyseTotalChildrenSQLSelectQuery((SQLSelect) child);
+      }
+      if (child instanceof MySqlUpdateStatement) {
+        totalChildren += analyseTotalChildrenSQLUpdateStatement((MySqlUpdateStatement) child);
+      }
+      if (child instanceof MySqlInsertStatement) {
+        totalChildren += analyseTotalChildrenSQLInsertStatement((MySqlInsertStatement) child);
+      }
+      if (child instanceof MySqlDeleteStatement) {
+        totalChildren += analyseTotalChildrenSQLDeleteStatement((MySqlDeleteStatement) child);
       }
     }
     return totalChildren;
