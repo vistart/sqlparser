@@ -9,10 +9,7 @@ import com.adang.druid.proxy.sql.ast.SQLStatement;
 import com.adang.druid.proxy.sql.ast.expr.*;
 import com.adang.druid.proxy.sql.ast.statement.*;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.MySqlUnique;
-import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlDeleteStatement;
-import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlInsertStatement;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
-import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlUpdateStatement;
 import com.adang.druid.proxy.sql.dialect.mysql.parser.MySqlStatementParser;
 import com.adang.druid.proxy.sql.parser.SQLStatementParser;
 import com.adang.druid.proxy.util.JdbcConstants;
@@ -131,39 +128,54 @@ public class test {
     return statementType;
   }
 
-  public static int analyseTotalChildrenSQLBinaryOpExpr(SQLBinaryOpExpr sql) {
-    int totalChildren = 0;
+  public static feature analyseTotalChildrenSQLBinaryOpExpr(SQLBinaryOpExpr sql) {
+    feature feature = new feature();
+    int height = 1;
     if (sql.getLeft() instanceof SQLBinaryOpExpr) {
-      totalChildren += analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getLeft());
+      feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getLeft());
+      feature = feature.addTotalChildren(t);
+      height = Math.max(height, t.height+1);
     } else {
-      totalChildren++;
+      feature.totalChildren++;
     }
     if (sql.getRight() instanceof SQLBinaryOpExpr) {
-      totalChildren += analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getRight());
+      feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getRight());
+      feature = feature.addTotalChildren(t);
+      height = Math.max(height, t.height+1);
     } else {
-      totalChildren++;
+      feature.totalChildren++;
     }
-    return totalChildren;
+    feature.height = height;
+    return feature;
   }
 
-  public static int analyseTotalChildrenSQLSelectQuery(SQLSelect sql) {
-    int totalChildren = 0;
+  public static feature analyseTotalChildrenSQLExprTableSource(SQLExprTableSource from) {
+    feature feature = new feature();
+    if (from.getExpr() instanceof SQLIdentifierExpr) {
+      feature.totalChildren++;
+    }
+    return feature;
+  }
+
+  public static feature analyseTotalChildrenSQLSelectQuery(SQLSelect sql) {
+    feature feature = new feature();
+    int height = 1;
     SQLSelectQuery query = sql.getQuery();
     if (query instanceof MySqlSelectQueryBlock) {
       // select list
       if (((MySqlSelectQueryBlock) query).getSelectList().size() > 0) {
         for (SQLSelectItem selectItem : ((MySqlSelectQueryBlock) query).getSelectList()) {
           if (selectItem.getExpr() instanceof SQLIdentifierExpr || selectItem.getExpr() instanceof SQLAggregateExpr) {
-            totalChildren++;
+            feature.totalChildren++;
           }
           if (selectItem.getExpr() instanceof SQLCaseExpr) {
             if (selectItem.getExpr() != null && ((SQLCaseExpr) selectItem.getExpr()).getItems().size() > 0){
-              totalChildren += ((SQLCaseExpr) selectItem.getExpr()).getItems().size();
+              feature.totalChildren += ((SQLCaseExpr) selectItem.getExpr()).getItems().size();
             }
           }
           if (selectItem.getExpr() instanceof SQLMethodInvokeExpr) {
             if (selectItem.getExpr() != null && ((SQLMethodInvokeExpr) selectItem.getExpr()).getParameters().size() > 0) {
-              totalChildren += ((SQLMethodInvokeExpr) selectItem.getExpr()).getParameters().size();
+              feature.totalChildren += ((SQLMethodInvokeExpr) selectItem.getExpr()).getParameters().size();
             }
           }
         }
@@ -173,12 +185,14 @@ public class test {
       SQLTableSource from = ((MySqlSelectQueryBlock)query).getFrom();
       if (from instanceof SQLSubqueryTableSource) {
         SQLSelect subSelect = ((SQLSubqueryTableSource) from).getSelect();
-        totalChildren += analyseTotalChildrenSQLSelectQuery(subSelect);
+        feature t = analyseTotalChildrenSQLSelectQuery(subSelect);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
       if (from instanceof SQLExprTableSource) {
-        if (((SQLExprTableSource) from).getExpr() instanceof SQLIdentifierExpr) {
-          totalChildren++;
-        }
+        feature t = analyseTotalChildrenSQLExprTableSource((SQLExprTableSource) from);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
 
       // group by
@@ -186,7 +200,7 @@ public class test {
       if (groupBy != null && groupBy.getItems().size() > 0) {
         for (SQLExpr item : groupBy.getItems()) {
           if (item instanceof SQLIdentifierExpr) {
-            totalChildren++;
+            feature.totalChildren++;
           }
         }
       }
@@ -196,7 +210,7 @@ public class test {
       if (orderBy != null && orderBy.getItems().size() > 0) {
         for (SQLSelectOrderByItem item : orderBy.getItems()) {
           if (item.getExpr() instanceof SQLIdentifierExpr) {
-            totalChildren++;
+            feature.totalChildren++;
           }
         }
       }
@@ -204,47 +218,142 @@ public class test {
       // where
       SQLExpr where = ((MySqlSelectQueryBlock) query).getWhere();
       if (where instanceof SQLBinaryOpExpr) {
-        totalChildren += analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) where);
+        feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) where);
+        // TODO should we include a height of 1 for these cases?
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
     }
-    return totalChildren;
+    feature.height = height;
+    return feature;
   }
 
-  public static int analyseTotalChildrenSQLUpdateStatement(MySqlUpdateStatement sql) {
-    return 0;
+  public static feature analyseTotalChildrenSQLUpdateStatement(SQLUpdateStatement sql) {
+    feature feature = new feature();
+    System.out.println(sql);
+    return feature;
   }
 
-  public static int analyseTotalChildrenSQLInsertStatement(MySqlInsertStatement sql) {
-    return 0;
-  }
-
-  public static int analyseTotalChildrenSQLDeleteStatement(MySqlDeleteStatement sql) {
-    return 0;
-  }
-
-  public static int analyseTotalChildren(SQLStatement stmt) {
-    if (stmt.getChildren().isEmpty()) {
-      return 0;
+  public static feature analyseTotalChildrenSQLUpdateSetItem(SQLUpdateSetItem sql) {
+    feature feature = new feature();
+    if (sql.getColumn() instanceof SQLIdentifierExpr) {
+      feature.totalChildren++;
     }
-    int totalChildren = 0;
+    if (sql.getValue() instanceof SQLCharExpr) {
+      feature.totalChildren++;
+    }
+    return feature;
+  }
+
+  public static feature analyseTotalChildrenSQLInsertStatement(SQLInsertStatement sql) {
+    feature feature = new feature();
+    System.out.println(sql);
+    return feature;
+  }
+
+  public static feature analyseTotalChildrenSQLDeleteStatement(SQLDeleteStatement sql) {
+    feature feature = new feature();
+    System.out.println(sql);
+    return feature;
+  }
+
+  public static feature analyseStmt(SQLStatement stmt) {
+    feature feature = new feature();
+    if (stmt instanceof SQLSelectStatement){
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if (stmt instanceof SQLUpdateStatement sqlUpdateStatement) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if (stmt instanceof SQLInsertStatement insertStatement) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if(stmt instanceof SQLDeleteStatement deleteStatement) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if (stmt instanceof SQLCreateTableStatement createTableStmt) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if (stmt instanceof SQLDropTableStatement dropTableStmt) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if (stmt instanceof SQLCreateViewStatement createViewStmt) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    } else if (stmt instanceof SQLCreateIndexStatement createIndexStmt) {
+      feature t = analyseTotalChildren(stmt);
+      feature = feature.addTotalChildren(t);
+      feature = feature.addHeight(t);
+    }
+    return feature;
+  }
+
+  public static feature analyseTotalChildren(SQLStatement stmt) {
+    feature feature = new feature();
+    if (stmt.getChildren().isEmpty()) {
+      return feature;
+    }
+    int height = 1;
     for (SQLObject child : stmt.getChildren()) {
       if (child instanceof SQLStatement) {
-        totalChildren += analyseTotalChildren((SQLStatement)child);
+        feature t = analyseTotalChildren((SQLStatement) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
       if (child instanceof SQLSelect) {
-        totalChildren += analyseTotalChildrenSQLSelectQuery((SQLSelect) child);
+        feature t = analyseTotalChildrenSQLSelectQuery((SQLSelect) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
-      if (child instanceof MySqlUpdateStatement) {
-        totalChildren += analyseTotalChildrenSQLUpdateStatement((MySqlUpdateStatement) child);
+      if (child instanceof SQLUpdateStatement) {
+        // feature t = analyseTotalChildrenSQLUpdateStatement((SQLUpdateStatement) child);
+        feature t= analyseTotalChildren((SQLStatement) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
-      if (child instanceof MySqlInsertStatement) {
-        totalChildren += analyseTotalChildrenSQLInsertStatement((MySqlInsertStatement) child);
+      if (child instanceof SQLUpdateSetItem) {
+        feature t = analyseTotalChildrenSQLUpdateSetItem((SQLUpdateSetItem) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
       }
-      if (child instanceof MySqlDeleteStatement) {
-        totalChildren += analyseTotalChildrenSQLDeleteStatement((MySqlDeleteStatement) child);
+      if (child instanceof SQLInsertStatement) {
+        // feature t = analyseTotalChildrenSQLInsertStatement((SQLInsertStatement) child);
+        feature t = analyseTotalChildren((SQLStatement) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
+      }
+      if (child instanceof SQLDeleteStatement) {
+        // feature t = analyseTotalChildrenSQLDeleteStatement((SQLDeleteStatement) child);
+        feature t = analyseTotalChildren((SQLStatement) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
+      }
+      if (child instanceof SQLExprTableSource) {
+        feature t = analyseTotalChildrenSQLExprTableSource((SQLExprTableSource) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
+      }
+      if (child instanceof SQLIdentifierExpr) {
+        feature.totalChildren++;
+      }
+      if (child instanceof SQLBinaryOpExpr) {
+        feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) child);
+        feature = feature.addTotalChildren(t);
+        height = Math.max(height, t.height+1);
+      }
+      if (child instanceof SQLColumnDefinition || child instanceof SQLUnionQuery) {
+        feature.totalChildren++;
       }
     }
-    return totalChildren;
+    feature.height = height;
+    return feature;
   }
 
   public static void analyseStatement(SQLStatement stmt) {
@@ -332,9 +441,9 @@ public class test {
       }
     }
 
-    totalChildren = analyseTotalChildren(stmt);
+    feature t = analyseStmt(stmt);
 
-    System.out.println(totalChildren);
+    System.out.println(t);
   }
 
   public static void analyse(String sql) {
@@ -349,7 +458,7 @@ public class test {
   }
 
   public static void main(String[] args) {
-    String[] sqls = new String[5];
+    String[] sqls = new String[7];
     sqls[0] = """
             SELECT `type`, `review_interval_distrib`, COUNT(*) FROM (
                 SELECT *, CASE WHEN `A`.`review_interval` <= 300 THEN `0_5m`
@@ -392,10 +501,25 @@ create table go_rush_producer.node_info
 )
     comment '节点信息';
 
+            """;
+    sqls[5] = """
 create index node_info_id_index
     on go_rush_producer.node_info (id);
-
-
+            """;
+    sqls[6] = """
+            SELECT `A`.`hour`, `value`, `value_yesterday`, `avg_7_days` FROM
+            (SELECT `hour`, `value` FROM `indicator_cycle`
+            WHERE (`day` = '2023-07-03') AND `is_delete` = 0 AND `cate_1` = 'user' AND `cate_2` = '' AND `cate_3` ='' AND `name` = 'total'
+            ORDER BY `hour`) AS `A` LEFT JOIN\s
+            (SELECT `hour`, `value` as `value_yesterday` FROM `indicator_cycle`
+            WHERE `day` = DATE(DATE_SUB('2023-07-03', INTERVAL 1 DAY)) AND `is_delete` = 0 AND `cate_1` = 'user' AND `cate_2` = '' AND `cate_3` ='' AND `name` = 'total'
+            ORDER BY `hour`) AS `B` ON `A`.`hour` = `B`.`hour` LEFT JOIN
+            (SELECT `hour`, AVG(`value`) as `avg_7_days` FROM `indicator_cycle`
+            WHERE `day` BETWEEN DATE(DATE_SUB('2023-07-03', INTERVAL 6 DAY)) AND '2023-07-03' AND `is_delete` = 0 AND `cate_1` = 'user' AND `cate_2` = '' AND `cate_3` ='' AND `name` = 'total'
+            GROUP BY `hour` ORDER BY `hour`) AS `C`
+            ON `A`.`hour` = `C`.`hour`
+                        
+            limit 0, 5000
             """;
     for (String sql : sqls) {
       analyse(sql);
