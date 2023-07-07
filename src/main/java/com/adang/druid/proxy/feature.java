@@ -1,5 +1,8 @@
 package com.adang.druid.proxy;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class feature {
     public int height;
     public int totalChildren;
@@ -66,5 +69,24 @@ public class feature {
     public feature addHeight(feature t) {
         height += t.height;
         return this; // for chaining
+    }
+
+    public List<Integer> toList() {
+        List<Integer> list = new ArrayList<>();
+        list.add(height);
+        list.add(totalChildren);
+        list.add(hasChildren ? 1 : 0);
+        list.add(hasExprTableSource ? 1 : 0);
+        list.add(hasJoinTableSource ? 1 : 0);
+        list.add(hasSubqueryTableSource ? 1 : 0);
+        list.add(hasWithSubqueryClause ? 1 : 0);
+        list.add(hasSelectWithSubquery ? 1 : 0);
+        list.add(hasUnionQuery ? 1 : 0);
+        list.add(hasInsertValues);
+        list.add(hasUpdateSetItems);
+        list.add(hasColumnDefinitions);
+        list.add(hasMySqlUnique);
+        list.add(hasBinaryOps);
+        return list;
     }
 }

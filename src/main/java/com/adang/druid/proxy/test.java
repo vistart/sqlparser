@@ -11,10 +11,14 @@ import com.adang.druid.proxy.sql.ast.statement.*;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.MySqlUnique;
 import com.adang.druid.proxy.sql.dialect.mysql.ast.statement.MySqlSelectQueryBlock;
 import com.adang.druid.proxy.sql.dialect.mysql.parser.MySqlStatementParser;
+import com.adang.druid.proxy.sql.parser.ParserException;
 import com.adang.druid.proxy.sql.parser.SQLStatementParser;
 import com.adang.druid.proxy.util.JdbcConstants;
 
+import java.io.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class test {
 
@@ -511,7 +515,7 @@ public class test {
 
     feature t = analyseStmt(stmt);
 
-    System.out.println(t);
+    System.out.println(t.toList().toString());
   }
 
   public static void analyse(String sql) {
@@ -525,7 +529,7 @@ public class test {
     }
   }
 
-  public static void main(String[] args) {
+  public static void main(String[] args) throws FileNotFoundException {
     String[] sqls = new String[7];
     sqls[0] = """
             SELECT `type`, `review_interval_distrib`, COUNT(*) FROM (
@@ -591,6 +595,21 @@ create index node_info_id_index
             """;
     for (String sql : sqls) {
       analyse(sql);
+    }
+
+    File file = new File("I:\\GitHubRepositories\\vistart\\sqlparser\\src\\main\\java\\com\\adang\\druid\\proxy\\sqls_malicious.txt");
+    List<String> sqlsfile = new ArrayList<>();
+    try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
+      sqlsfile = reader.lines().collect(Collectors.toList());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
+    for (String sql : sqlsfile) {
+      try {
+        analyse(sql);
+      } catch (ParserException e) {
+        System.out.println(e.getMessage());
+      }
     }
   }
 }
