@@ -428,108 +428,20 @@ public class test {
     return feature;
   }
 
-  public static void analyseStatement(SQLStatement stmt) throws FileNotFoundException {
-    short statementType = analyseStatementType(stmt);
-    // 是否有子节点
-    boolean hasChildren = false;
-    // 是否有表达式表
-    boolean hasExprTableSource = false;
-    // 是否有连接表
-    boolean hasJoinTableSource = false;
-    // 是否有子查询表
-    boolean hasSubqueryTableSource = false;
-    // 是否有 with 查询子句
-    boolean hasWithSubqueryClause = false;
-    // select 查询是否有 with 查询子句
-    boolean hasSelectWithSubquery = false;
-    // 是否有 union 查询
-    boolean hasUnionQuery = false;
-    // 是否有插入值
-    int hasInsertValues = 0;
-    // 是否有更新项
-    int hasUpdateSetItems = 0;
-    // 是否有列定义
-    int hasColumnDefinitions = 0;
-    // 是否有 mysql 唯一约束
-    int hasMySqlUnique = 0;
-    // 是否有二元运算
-    int hasBinaryOps = 0;
-
-    int totalChildren = 0;
-
-    int height = 0;
-
-    if (!stmt.getChildren().isEmpty()) {
-      hasChildren = true;
-
-      List<SQLObject> children = stmt.getChildren();
-      System.out.println(children);
-      for (SQLObject child: children) {
-        hasExprTableSource |= child instanceof SQLExprTableSource;
-        hasJoinTableSource |= child instanceof SQLJoinTableSource;
-        hasSubqueryTableSource |= child instanceof SQLSubqueryTableSource;
-        hasWithSubqueryClause |= child instanceof  SQLWithSubqueryClause;
-
-        if (statementType == 1 && child instanceof SQLSelect) { // SELECT 语句独有特征
-          SQLWithSubqueryClause subquery = ((SQLSelect) child).getWithSubQuery();
-          hasSelectWithSubquery |= subquery != null;
-          if (((SQLSelect) child).getQuery() instanceof SQLSelectQueryBlock query) {
-            SQLObject from = query.getFrom();
-            hasExprTableSource |= from instanceof SQLExprTableSource;
-            hasJoinTableSource |= from instanceof SQLJoinTableSource;
-            hasSubqueryTableSource |= from instanceof SQLSubqueryTableSource;
-            hasWithSubqueryClause |= from instanceof  SQLWithSubqueryClause;
-          } else if (((SQLSelect) child).getQuery() instanceof SQLUnionQuery) {
-            hasUnionQuery = true;
-            // SQLUnionQuery query = (SQLUnionQuery) ((SQLSelect) child).getQuery();
-          }
-        }
-
-        if (statementType == 2 && child instanceof SQLInsertStatement.ValuesClause) {
-          hasInsertValues = ((SQLInsertStatement.ValuesClause) child).getValues().size();
-        }
-
-        if (statementType == 3 && child instanceof SQLUpdateSetItem) {
-          hasUpdateSetItems++;
-        }
-
-        if (statementType == 4) {
-          System.out.println(child);
-        }
-
-        if (statementType == 5) {
-          if (child instanceof SQLColumnDefinition) {
-            hasColumnDefinitions++;
-            continue;
-          }
-          if (child instanceof MySqlUnique) {
-            hasMySqlUnique++;
-          }
-        }
-
-        if (child instanceof SQLBinaryOpExpr) {
-          hasBinaryOps++;
-        }
-      }
-    }
-
-    feature t = analyseStmt(stmt);
-
-    try (BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream("I:\\GitHubRepositories\\vistart\\sqlparser\\src\\main\\java\\com\\adang\\druid\\proxy\\results.txt"))) {
-      output.write(t.toList().toString().getBytes());
-    } catch (IOException e) {
-      throw new RuntimeException(e);
-    }
-  }
-
-  public static void analyse(String sql) throws FileNotFoundException {
+  public static void analyse(String sql) {
 
     // 新建 MySQL Parser
     SQLStatementParser parser = new MySqlStatementParser(sql);
     final String dbType = JdbcConstants.MYSQL;
     List<SQLStatement> stmtList = SQLUtils.parseStatements(sql, dbType);
     for (SQLStatement stmt: stmtList) {
-      analyseStatement(stmt);
+      feature t = analyseStmt(stmt);
+
+      try (BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream("I:\\GitHubRepositories\\vistart\\sqlparser\\src\\main\\java\\com\\adang\\druid\\proxy\\results.txt"))) {
+        output.write(t.toList().toString().getBytes());
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 
