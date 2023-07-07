@@ -428,7 +428,7 @@ public class test {
     return feature;
   }
 
-  public static void analyseStatement(SQLStatement stmt) {
+  public static void analyseStatement(SQLStatement stmt) throws FileNotFoundException {
     short statementType = analyseStatementType(stmt);
     // 是否有子节点
     boolean hasChildren = false;
@@ -515,10 +515,14 @@ public class test {
 
     feature t = analyseStmt(stmt);
 
-    System.out.println(t.toList().toString());
+    try (BufferedOutputStream output = new BufferedOutputStream(new FileOutputStream("I:\\GitHubRepositories\\vistart\\sqlparser\\src\\main\\java\\com\\adang\\druid\\proxy\\results.txt"))) {
+      output.write(t.toList().toString().getBytes());
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
-  public static void analyse(String sql) {
+  public static void analyse(String sql) throws FileNotFoundException {
 
     // 新建 MySQL Parser
     SQLStatementParser parser = new MySqlStatementParser(sql);
