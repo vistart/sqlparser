@@ -135,6 +135,7 @@ public class test {
       feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getLeft());
       feature = feature.addTotalChildren(t);
       height = Math.max(height, t.height+1);
+      feature = feature.add(t);
     } else {
       feature.totalChildren++;
     }
@@ -142,6 +143,7 @@ public class test {
       feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) sql.getRight());
       feature = feature.addTotalChildren(t);
       height = Math.max(height, t.height+1);
+      feature = feature.add(t);
     } else {
       feature.totalChildren++;
     }
@@ -188,11 +190,13 @@ public class test {
         feature t = analyseTotalChildrenSQLSelectQuery(subSelect);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (from instanceof SQLExprTableSource) {
         feature t = analyseTotalChildrenSQLExprTableSource((SQLExprTableSource) from);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
 
       // group by
@@ -222,6 +226,7 @@ public class test {
         // TODO should we include a height of 1 for these cases?
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
     }
     feature.height = height;
@@ -263,34 +268,42 @@ public class test {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if (stmt instanceof SQLUpdateStatement sqlUpdateStatement) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if (stmt instanceof SQLInsertStatement insertStatement) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if(stmt instanceof SQLDeleteStatement deleteStatement) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if (stmt instanceof SQLCreateTableStatement createTableStmt) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if (stmt instanceof SQLDropTableStatement dropTableStmt) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if (stmt instanceof SQLCreateViewStatement createViewStmt) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     } else if (stmt instanceof SQLCreateIndexStatement createIndexStmt) {
       feature t = analyseTotalChildren(stmt);
       feature = feature.addTotalChildren(t);
       feature = feature.addHeight(t);
+      feature = feature.add(t);
     }
     return feature;
   }
@@ -300,45 +313,53 @@ public class test {
     if (stmt.getChildren().isEmpty()) {
       return feature;
     }
+    feature.hasChildren = true;
     int height = 1;
     for (SQLObject child : stmt.getChildren()) {
       if (child instanceof SQLStatement) {
         feature t = analyseTotalChildren((SQLStatement) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLSelect) {
         feature t = analyseTotalChildrenSQLSelectQuery((SQLSelect) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLUpdateStatement) {
         // feature t = analyseTotalChildrenSQLUpdateStatement((SQLUpdateStatement) child);
         feature t= analyseTotalChildren((SQLStatement) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLUpdateSetItem) {
         feature t = analyseTotalChildrenSQLUpdateSetItem((SQLUpdateSetItem) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLInsertStatement) {
         // feature t = analyseTotalChildrenSQLInsertStatement((SQLInsertStatement) child);
         feature t = analyseTotalChildren((SQLStatement) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLDeleteStatement) {
         // feature t = analyseTotalChildrenSQLDeleteStatement((SQLDeleteStatement) child);
         feature t = analyseTotalChildren((SQLStatement) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLExprTableSource) {
         feature t = analyseTotalChildrenSQLExprTableSource((SQLExprTableSource) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLIdentifierExpr) {
         feature.totalChildren++;
@@ -347,9 +368,56 @@ public class test {
         feature t = analyseTotalChildrenSQLBinaryOpExpr((SQLBinaryOpExpr) child);
         feature = feature.addTotalChildren(t);
         height = Math.max(height, t.height+1);
+        feature = feature.add(t);
       }
       if (child instanceof SQLColumnDefinition || child instanceof SQLUnionQuery) {
         feature.totalChildren++;
+      }
+      feature.hasExprTableSource |= child instanceof SQLExprTableSource;
+      feature.hasJoinTableSource |= child instanceof SQLJoinTableSource;
+      feature.hasSubqueryTableSource |= child instanceof SQLSubqueryTableSource;
+      feature.hasWithSubqueryClause |= child instanceof  SQLWithSubqueryClause;
+
+      short statementType = analyseStatementType(stmt);
+      if (statementType == 1 && child instanceof SQLSelect) { // SELECT 语句独有特征
+        SQLWithSubqueryClause subquery = ((SQLSelect) child).getWithSubQuery();
+        feature.hasSelectWithSubquery |= subquery != null;
+        if (((SQLSelect) child).getQuery() instanceof SQLSelectQueryBlock query) {
+          SQLObject from = query.getFrom();
+          feature.hasExprTableSource |= from instanceof SQLExprTableSource;
+          feature.hasJoinTableSource |= from instanceof SQLJoinTableSource;
+          feature.hasSubqueryTableSource |= from instanceof SQLSubqueryTableSource;
+          feature.hasWithSubqueryClause |= from instanceof  SQLWithSubqueryClause;
+        } else if (((SQLSelect) child).getQuery() instanceof SQLUnionQuery) {
+          feature.hasUnionQuery = true;
+          // SQLUnionQuery query = (SQLUnionQuery) ((SQLSelect) child).getQuery();
+        }
+      }
+
+      if (statementType == 2 && child instanceof SQLInsertStatement.ValuesClause) {
+        feature.hasInsertValues = ((SQLInsertStatement.ValuesClause) child).getValues().size();
+      }
+
+      if (statementType == 3 && child instanceof SQLUpdateSetItem) {
+        feature.hasUpdateSetItems++;
+      }
+
+      if (statementType == 4) {
+        System.out.println(child);
+      }
+
+      if (statementType == 5) {
+        if (child instanceof SQLColumnDefinition) {
+          feature.hasColumnDefinitions++;
+          continue;
+        }
+        if (child instanceof MySqlUnique) {
+          feature.hasMySqlUnique++;
+        }
+      }
+
+      if (child instanceof SQLBinaryOpExpr) {
+        feature.hasBinaryOps++;
       }
     }
     feature.height = height;
